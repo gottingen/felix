@@ -1,4 +1,4 @@
-package felix
+package filesystem
 
 import (
 	"io"

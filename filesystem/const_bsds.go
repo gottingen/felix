@@ -2,7 +2,7 @@
 
 // +build darwin openbsd freebsd netbsd dragonfly
 
-package felix
+package filesystem
 
 import (
 "syscall"

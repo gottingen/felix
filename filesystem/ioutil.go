@@ -1,4 +1,4 @@
-package felix
+package filesystem
 
 import (
 "bytes"
@@ -18,11 +18,6 @@ func (f byName) Len() int           { return len(f) }
 func (f byName) Less(i, j int) bool { return f[i].Name() < f[j].Name() }
 func (f byName) Swap(i, j int)      { f[i], f[j] = f[j], f[i] }
 
-// ReadDir reads the directory named by dirname and returns
-// a list of sorted directory entries.
-func (a Felix) ReadDir(dirname string) ([]os.FileInfo, error) {
-	return ReadDir(a.Fs, dirname)
-}
 
 func ReadDir(fs Fs, dirname string) ([]os.FileInfo, error) {
 	f, err := fs.Open(dirname)
@@ -38,13 +33,6 @@ func ReadDir(fs Fs, dirname string) ([]os.FileInfo, error) {
 	return list, nil
 }
 
-// ReadFile reads the file named by filename and returns the contents.
-// A successful call returns err == nil, not err == EOF. Because ReadFile
-// reads the whole file, it does not treat an EOF from Read as an error
-// to be reported.
-func (a Felix) ReadFile(filename string) ([]byte, error) {
-	return ReadFile(a.Fs, filename)
-}
 
 func ReadFile(fs Fs, filename string) ([]byte, error) {
 	f, err := fs.Open(filename)
@@ -99,12 +87,6 @@ func ReadAll(r io.Reader) ([]byte, error) {
 	return readAll(r, bytes.MinRead)
 }
 
-// WriteFile writes data to a file named by filename.
-// If the file does not exist, WriteFile creates it with permissions perm;
-// otherwise WriteFile truncates it before writing.
-func (a Felix) WriteFile(filename string, data []byte, perm os.FileMode) error {
-	return WriteFile(a.Fs, filename, data, perm)
-}
 
 func WriteFile(fs Fs, filename string, data []byte, perm os.FileMode) error {
 	f, err := fs.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
@@ -144,18 +126,6 @@ func nextSuffix() string {
 	return strconv.Itoa(int(1e9 + r%1e9))[1:]
 }
 
-// TempFile creates a new temporary file in the directory dir
-// with a name beginning with prefix, opens the file for reading
-// and writing, and returns the resulting *File.
-// If dir is the empty string, TempFile uses the default directory
-// for temporary files (see os.TempDir).
-// Multiple programs calling TempFile simultaneously
-// will not choose the same file.  The caller can use f.Name()
-// to find the pathname of the file.  It is the caller's responsibility
-// to remove the file when no longer needed.
-func (a Felix) TempFile(dir, prefix string) (f File, err error) {
-	return TempFile(a.Fs, dir, prefix)
-}
 
 func TempFile(fs Fs, dir, prefix string) (f File, err error) {
 	if dir == "" {
@@ -179,16 +149,7 @@ func TempFile(fs Fs, dir, prefix string) (f File, err error) {
 	return
 }
 
-// TempDir creates a new temporary directory in the directory dir
-// with a name beginning with prefix and returns the path of the
-// new directory.  If dir is the empty string, TempDir uses the
-// default directory for temporary files (see os.TempDir).
-// Multiple programs calling TempDir simultaneously
-// will not choose the same directory.  It is the caller's responsibility
-// to remove the directory when no longer needed.
-func (a Felix) TempDir(dir, prefix string) (name string, err error) {
-	return TempDir(a.Fs, dir, prefix)
-}
+
 func TempDir(fs Fs, dir, prefix string) (name string, err error) {
 	if dir == "" {
 		dir = os.TempDir()

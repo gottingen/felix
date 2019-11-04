@@ -5,7 +5,7 @@
 // +build !dragonfly
 // +build !netbsd
 
-package felix
+package filesystem
 
 import (
 	"syscall"
