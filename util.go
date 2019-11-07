@@ -1,85 +1,315 @@
+
 package felix
 
 import (
-	"github.com/gottingen/felix/filesystem"
+	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"unicode"
+
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 )
 
-
-func (a Felix) Walk(root string, walkFn filepath.WalkFunc) error {
-	return filesystem.Walk(a.Fs, root, walkFn)
-}
-
-func (a Felix) TempDir(dir, prefix string) (name string, err error) {
-	return filesystem.TempDir(a.Fs, dir, prefix)
-}
-
-func (a Felix) TempFile(dir, prefix string) (f filesystem.File, err error) {
-	return filesystem.TempFile(a.Fs, dir, prefix)
-}
-
-// WriteFile writes data to a file named by filename.
-// If the file does not exist, WriteFile creates it with permissions perm;
-// otherwise WriteFile truncates it before writing.
-func (a Felix) WriteFile(filename string, data []byte, perm os.FileMode) error {
-	return filesystem.WriteFile(a.Fs, filename, data, perm)
-}
-
-// ReadFile reads the file named by filename and returns the contents.
-// A successful call returns err == nil, not err == EOF. Because ReadFile
-// reads the whole file, it does not treat an EOF from Read as an error
-// to be reported.
-func (a Felix) ReadFile(filename string) ([]byte, error) {
-	return filesystem.ReadFile(a.Fs, filename)
-}
-
-// ReadDir reads the directory named by dirname and returns
-// a list of sorted directory entries.
-func (a Felix) ReadDir(dirname string) ([]os.FileInfo, error) {
-	return filesystem.ReadDir(a.Fs, dirname)
-}
-
-
-// Same as WriteReader but checks to see if file/directory already exists.
-func (a Felix) SafeWriteReader(path string, r io.Reader) (err error) {
-	return filesystem.SafeWriteReader(a.Fs, path, r)
-}
+// Filepath separator defined by os.Separator.
+const FilePathSeparator = string(filepath.Separator)
 
 // Takes a reader and a path and writes the content
 func (a Felix) WriteReader(path string, r io.Reader) (err error) {
-	return filesystem.WriteReader(a.Fs, path, r)
+	return WriteReader(a.Fs, path, r)
 }
 
+func WriteReader(fs Fs, path string, r io.Reader) (err error) {
+	dir, _ := filepath.Split(path)
+	ospath := filepath.FromSlash(dir)
+
+	if ospath != "" {
+		err = fs.MkdirAll(ospath, 0777) // rwx, rw, r
+		if err != nil {
+			if err != os.ErrExist {
+				return err
+			}
+		}
+	}
+
+	file, err := fs.Create(path)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	_, err = io.Copy(file, r)
+	return
+}
+
+// Same as WriteReader but checks to see if file/directory already exists.
+func (a Felix) SafeWriteReader(path string, r io.Reader) (err error) {
+	return SafeWriteReader(a.Fs, path, r)
+}
+
+func SafeWriteReader(fs Fs, path string, r io.Reader) (err error) {
+	dir, _ := filepath.Split(path)
+	ospath := filepath.FromSlash(dir)
+
+	if ospath != "" {
+		err = fs.MkdirAll(ospath, 0777) // rwx, rw, r
+		if err != nil {
+			return
+		}
+	}
+
+	exists, err := Exists(fs, path)
+	if err != nil {
+		return
+	}
+	if exists {
+		return fmt.Errorf("%v already exists", path)
+	}
+
+	file, err := fs.Create(path)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	_, err = io.Copy(file, r)
+	return
+}
 
 func (a Felix) GetTempDir(subPath string) string {
-	return filesystem.GetTempDir(a.Fs, subPath)
+	return GetTempDir(a.Fs, subPath)
+}
+
+// GetTempDir returns the default temp directory with trailing slash
+// if subPath is not empty then it will be created recursively with mode 777 rwx rwx rwx
+func GetTempDir(fs Fs, subPath string) string {
+	addSlash := func(p string) string {
+		if FilePathSeparator != p[len(p)-1:] {
+			p = p + FilePathSeparator
+		}
+		return p
+	}
+	dir := addSlash(os.TempDir())
+
+	if subPath != "" {
+		// preserve windows backslash :-(
+		if FilePathSeparator == "\\" {
+			subPath = strings.Replace(subPath, "\\", "____", -1)
+		}
+		dir = dir + UnicodeSanitize((subPath))
+		if FilePathSeparator == "\\" {
+			dir = strings.Replace(dir, "____", "\\", -1)
+		}
+
+		if exists, _ := Exists(fs, dir); exists {
+			return addSlash(dir)
+		}
+
+		err := fs.MkdirAll(dir, 0777)
+		if err != nil {
+			panic(err)
+		}
+		dir = addSlash(dir)
+	}
+	return dir
+}
+
+// Rewrite string to remove non-standard path characters
+func UnicodeSanitize(s string) string {
+	source := []rune(s)
+	target := make([]rune, 0, len(source))
+
+	for _, r := range source {
+		if unicode.IsLetter(r) ||
+			unicode.IsDigit(r) ||
+			unicode.IsMark(r) ||
+			r == '.' ||
+			r == '/' ||
+			r == '\\' ||
+			r == '_' ||
+			r == '-' ||
+			r == '%' ||
+			r == ' ' ||
+			r == '#' {
+			target = append(target, r)
+		}
+	}
+
+	return string(target)
+}
+
+// Transform characters with accents into plain forms.
+func NeuterAccents(s string) string {
+	t := transform.Chain(norm.NFD, transform.RemoveFunc(isMn), norm.NFC)
+	result, _, _ := transform.String(t, string(s))
+
+	return result
+}
+
+func isMn(r rune) bool {
+	return unicode.Is(unicode.Mn, r) // Mn: nonspacing marks
 }
 
 func (a Felix) FileContainsBytes(filename string, subslice []byte) (bool, error) {
-	return filesystem.FileContainsBytes(a.Fs, filename, subslice)
+	return FileContainsBytes(a.Fs, filename, subslice)
+}
+
+// Check if a file contains a specified byte slice.
+func FileContainsBytes(fs Fs, filename string, subslice []byte) (bool, error) {
+	f, err := fs.Open(filename)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+
+	return readerContainsAny(f, subslice), nil
 }
 
 func (a Felix) FileContainsAnyBytes(filename string, subslices [][]byte) (bool, error) {
-	return filesystem.FileContainsAnyBytes(a.Fs, filename, subslices)
+	return FileContainsAnyBytes(a.Fs, filename, subslices)
 }
 
+// Check if a file contains any of the specified byte slices.
+func FileContainsAnyBytes(fs Fs, filename string, subslices [][]byte) (bool, error) {
+	f, err := fs.Open(filename)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+
+	return readerContainsAny(f, subslices...), nil
+}
+
+// readerContains reports whether any of the subslices is within r.
+func readerContainsAny(r io.Reader, subslices ...[]byte) bool {
+
+	if r == nil || len(subslices) == 0 {
+		return false
+	}
+
+	largestSlice := 0
+
+	for _, sl := range subslices {
+		if len(sl) > largestSlice {
+			largestSlice = len(sl)
+		}
+	}
+
+	if largestSlice == 0 {
+		return false
+	}
+
+	bufflen := largestSlice * 4
+	halflen := bufflen / 2
+	buff := make([]byte, bufflen)
+	var err error
+	var n, i int
+
+	for {
+		i++
+		if i == 1 {
+			n, err = io.ReadAtLeast(r, buff[:halflen], halflen)
+		} else {
+			if i != 2 {
+				// shift left to catch overlapping matches
+				copy(buff[:], buff[halflen:])
+			}
+			n, err = io.ReadAtLeast(r, buff[halflen:], halflen)
+		}
+
+		if n > 0 {
+			for _, sl := range subslices {
+				if bytes.Contains(buff, sl) {
+					return true
+				}
+			}
+		}
+
+		if err != nil {
+			break
+		}
+	}
+	return false
+}
 
 func (a Felix) DirExists(path string) (bool, error) {
-	return filesystem.DirExists(a.Fs, path)
+	return DirExists(a.Fs, path)
+}
+
+// DirExists checks if a path exists and is a directory.
+func DirExists(fs Fs, path string) (bool, error) {
+	fi, err := fs.Stat(path)
+	if err == nil && fi.IsDir() {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
 }
 
 func (a Felix) IsDir(path string) (bool, error) {
-	return filesystem.IsDir(a.Fs, path)
+	return IsDir(a.Fs, path)
+}
+
+// IsDir checks if a given path is a directory.
+func IsDir(fs Fs, path string) (bool, error) {
+	fi, err := fs.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	return fi.IsDir(), nil
 }
 
 func (a Felix) IsEmpty(path string) (bool, error) {
-	return filesystem.IsEmpty(a.Fs, path)
+	return IsEmpty(a.Fs, path)
+}
+
+// IsEmpty checks if a given file or directory is empty.
+func IsEmpty(fs Fs, path string) (bool, error) {
+	if b, _ := Exists(fs, path); !b {
+		return false, fmt.Errorf("%q path does not exist", path)
+	}
+	fi, err := fs.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	if fi.IsDir() {
+		f, err := fs.Open(path)
+		if err != nil {
+			return false, err
+		}
+		defer f.Close()
+		list, err := f.Readdir(-1)
+		return len(list) == 0, nil
+	}
+	return fi.Size() == 0, nil
 }
 
 func (a Felix) Exists(path string) (bool, error) {
-	return filesystem.Exists(a.Fs, path)
+	return Exists(a.Fs, path)
 }
 
+// Check if a file or directory exists.
+func Exists(fs Fs, path string) (bool, error) {
+	_, err := fs.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
+}
 
+func FullBaseFsPath(basePathFs *BasePathFs, relativePath string) string {
+	combinedPath := filepath.Join(basePathFs.path, relativePath)
+	if parent, ok := basePathFs.source.(*BasePathFs); ok {
+		return FullBaseFsPath(parent, combinedPath)
+	}
+
+	return combinedPath
+}

@@ -1,4 +1,4 @@
-package filesystem
+package felix
 
 import (
 	"path/filepath"

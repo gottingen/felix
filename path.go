@@ -1,4 +1,4 @@
-package filesystem
+package felix
 
 import (
 	"os"
@@ -71,6 +71,16 @@ func lstatIfPossible(fs Fs, path string) (os.FileInfo, error) {
 	return fs.Stat(path)
 }
 
+// Walk walks the file tree rooted at root, calling walkFn for each file or
+// directory in the tree, including root. All errors that arise visiting files
+// and directories are filtered by walkFn. The files are walked in lexical
+// order, which makes the output deterministic but means that for very
+// large directories Walk can be inefficient.
+// Walk does not follow symbolic links.
+
+func (a Felix) Walk(root string, walkFn filepath.WalkFunc) error {
+	return Walk(a.Fs, root, walkFn)
+}
 
 func Walk(fs Fs, root string, walkFn filepath.WalkFunc) error {
 	info, err := lstatIfPossible(fs, root)
