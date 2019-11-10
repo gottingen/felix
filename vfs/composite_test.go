@@ -1,4 +1,5 @@
-package felix
+package vfs
+
 
 import (
 	"bytes"
@@ -12,7 +13,7 @@ import (
 
 var tempDirs []string
 
-func NewTempOsBaseFs(t *testing.T) Fs {
+func NewTempOsBaseFs(t *testing.T) Vfs {
 	name, err := TempDir(NewOsFs(), "", "")
 	if err != nil {
 		t.Error("error creating tempDir", err)
@@ -413,7 +414,7 @@ func TestUnionFileReaddirEmpty(t *testing.T) {
 	mem := NewMemMapFs()
 
 	// The OS file will return io.EOF on end of directory.
-	for _, fs := range []Fs{osFs, ufs, mem} {
+	for _, fs := range []Vfs{osFs, ufs, mem} {
 		baseDir, err := TempDir(fs, "", "empty-dir")
 		if err != nil {
 			t.Fatal(err)
@@ -505,3 +506,4 @@ func TestUnionFileReaddirAskForTooMany(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+

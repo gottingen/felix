@@ -1,18 +1,19 @@
-package felix
+package vfs
+
 
 import (
-"os"
-"syscall"
-"time"
+	"os"
+	"syscall"
+	"time"
 )
 
 var _ Lstater = (*ReadOnlyFs)(nil)
 
 type ReadOnlyFs struct {
-	source Fs
+	source Vfs
 }
 
-func NewReadOnlyFs(source Fs) Fs {
+func NewReadOnlyFs(source Vfs) Vfs {
 	return &ReadOnlyFs{source: source}
 }
 
@@ -78,5 +79,4 @@ func (r *ReadOnlyFs) MkdirAll(n string, p os.FileMode) error {
 func (r *ReadOnlyFs) Create(n string) (File, error) {
 	return nil, syscall.EPERM
 }
-
 

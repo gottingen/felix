@@ -1,4 +1,5 @@
-package felix
+package vfs
+
 
 import (
 	"io"
@@ -271,7 +272,7 @@ func (f *UnionFile) WriteString(s string) (n int, err error) {
 	return 0, BADFD
 }
 
-func copyToLayer(base Fs, layer Fs, name string) error {
+func copyToLayer(base Vfs, layer Vfs, name string) error {
 	bfh, err := base.Open(name)
 	if err != nil {
 		return err
@@ -318,3 +319,4 @@ func copyToLayer(base Fs, layer Fs, name string) error {
 	}
 	return layer.Chtimes(name, bfi.ModTime(), bfi.ModTime())
 }
+

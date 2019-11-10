@@ -1,4 +1,5 @@
-package felix
+package vfs
+
 
 import (
 	"os"
@@ -17,18 +18,18 @@ func contains(vector []string, s string) bool {
 	return false
 }
 
-func setupGlobDirRoot(t *testing.T, fs Fs) string {
-	path := testDir(fs)
+func setupGlobDirRoot(t *testing.T, fs Vfs) string {
+	path := TestDir(fs)
 	setupGlobFiles(t, fs, path)
 	return path
 }
 
-func setupGlobDirReusePath(t *testing.T, fs Fs, path string) string {
+func setupGlobDirReusePath(t *testing.T, fs Vfs, path string) string {
 	testRegistry[fs] = append(testRegistry[fs], path)
 	return setupGlobFiles(t, fs, path)
 }
 
-func setupGlobFiles(t *testing.T, fs Fs, path string) string {
+func setupGlobFiles(t *testing.T, fs Vfs, path string) string {
 	testSubDir := filepath.Join(path, "globs", "bobs")
 	err := fs.MkdirAll(testSubDir, 0700)
 	if err != nil && !os.IsExist(err) {
@@ -60,7 +61,7 @@ func setupGlobFiles(t *testing.T, fs Fs, path string) string {
 }
 
 func TestGlob(t *testing.T) {
-	defer removeAllTestFiles(t)
+	defer RemoveAllTestFiles(t)
 	var testDir string
 	for i, fs := range Fss {
 		if i == 0 {
@@ -112,7 +113,7 @@ func TestGlob(t *testing.T) {
 }
 
 func TestGlobSymlink(t *testing.T) {
-	defer removeAllTestFiles(t)
+	defer RemoveAllTestFiles(t)
 
 	fs := &OsFs{}
 	testDir := setupGlobDirRoot(t, fs)
@@ -166,3 +167,4 @@ func TestGlobError(t *testing.T) {
 		}
 	}
 }
+

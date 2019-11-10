@@ -1,4 +1,5 @@
-package felix
+package vfs
+
 
 import (
 	"fmt"
@@ -7,13 +8,13 @@ import (
 )
 
 func TestWalk(t *testing.T) {
-	defer removeAllTestFiles(t)
+	defer RemoveAllTestFiles(t)
 	var testDir string
 	for i, fs := range Fss {
 		if i == 0 {
-			testDir = setupTestDirRoot(t, fs)
+			testDir = SetupTestDirRoot(t, fs)
 		} else {
-			setupTestDirReusePath(t, fs, testDir)
+			SetupTestDirReusePath(t, fs, testDir)
 		}
 	}
 

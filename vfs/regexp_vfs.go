@@ -1,4 +1,4 @@
-package felix
+package vfs
 
 import (
 	"os"
@@ -13,10 +13,10 @@ import (
 //
 type RegexpFs struct {
 	re     *regexp.Regexp
-	source Fs
+	source Vfs
 }
 
-func NewRegexpFs(source Fs, re *regexp.Regexp) Fs {
+func NewRegexpFs(source Vfs, re *regexp.Regexp) Vfs {
 	return &RegexpFs{source: source, re: re}
 }
 
@@ -212,3 +212,4 @@ func (f *RegexpFile) Truncate(s int64) error {
 func (f *RegexpFile) WriteString(s string) (int, error) {
 	return f.f.WriteString(s)
 }
+

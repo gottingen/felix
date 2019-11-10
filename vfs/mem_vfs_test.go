@@ -1,4 +1,5 @@
-package felix
+package vfs
+
 
 import (
 	"fmt"
@@ -170,13 +171,13 @@ func TestPermSet(t *testing.T) {
 
 // Fails if multiple file objects use the same file.at counter in MemMapFs
 func TestMultipleOpenFiles(t *testing.T) {
-	defer removeAllTestFiles(t)
+	defer RemoveAllTestFiles(t)
 	const fileName = "felix-demo2.txt"
 
 	var data = make([][]byte, len(Fss))
 
 	for i, fs := range Fss {
-		dir := testDir(fs)
+		dir := TestDir(fs)
 		path := filepath.Join(dir, fileName)
 		fh1, err := fs.Create(path)
 		if err != nil {
@@ -237,11 +238,11 @@ func TestMultipleOpenFiles(t *testing.T) {
 
 // Test if file.Write() fails when opened as read only
 func TestReadOnly(t *testing.T) {
-	defer removeAllTestFiles(t)
+	defer RemoveAllTestFiles(t)
 	const fileName = "felix-demo.txt"
 
 	for _, fs := range Fss {
-		dir := testDir(fs)
+		dir := TestDir(fs)
 		path := filepath.Join(dir, fileName)
 
 		f, err := fs.Create(path)
@@ -277,11 +278,11 @@ func TestReadOnly(t *testing.T) {
 }
 
 func TestWriteCloseTime(t *testing.T) {
-	defer removeAllTestFiles(t)
+	defer RemoveAllTestFiles(t)
 	const fileName = "felix-demo.txt"
 
 	for _, fs := range Fss {
-		dir := testDir(fs)
+		dir := TestDir(fs)
 		path := filepath.Join(dir, fileName)
 
 		f, err := fs.Create(path)
@@ -391,15 +392,15 @@ loop:
 
 func TestMemFsDirMode(t *testing.T) {
 	fs := NewMemMapFs()
-	err := fs.Mkdir("/testDir1", 0644)
+	err := fs.Mkdir("/TestDir1", 0644)
 	if err != nil {
 		t.Error(err)
 	}
-	err = fs.MkdirAll("/sub/testDir2", 0644)
+	err = fs.MkdirAll("/sub/TestDir2", 0644)
 	if err != nil {
 		t.Error(err)
 	}
-	info, err := fs.Stat("/testDir1")
+	info, err := fs.Stat("/TestDir1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -409,7 +410,7 @@ func TestMemFsDirMode(t *testing.T) {
 	if !info.Mode().IsDir() {
 		t.Error("FileMode is not directory")
 	}
-	info, err = fs.Stat("/sub/testDir2")
+	info, err = fs.Stat("/sub/TestDir2")
 	if err != nil {
 		t.Error(err)
 	}
@@ -449,3 +450,4 @@ func TestMemFsUnexpectedEOF(t *testing.T) {
 		t.Fatal("Expected ErrUnexpectedEOF")
 	}
 }
+

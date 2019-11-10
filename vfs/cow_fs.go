@@ -1,4 +1,4 @@
-package felix
+package vfs
 
 import (
 	"fmt"
@@ -18,11 +18,11 @@ var _ Lstater = (*CopyOnWriteFs)(nil)
 //
 // Reading directories is currently only supported via Open(), not OpenFile().
 type CopyOnWriteFs struct {
-	base  Fs
-	layer Fs
+	base  Vfs
+	layer Vfs
 }
 
-func NewCopyOnWriteFs(base Fs, layer Fs) Fs {
+func NewCopyOnWriteFs(base Vfs, layer Vfs) Vfs {
 	return &CopyOnWriteFs{base: base, layer: layer}
 }
 
@@ -291,3 +291,4 @@ func (u *CopyOnWriteFs) MkdirAll(name string, perm os.FileMode) error {
 func (u *CopyOnWriteFs) Create(name string) (File, error) {
 	return u.OpenFile(name, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0666)
 }
+

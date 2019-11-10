@@ -1,4 +1,5 @@
-package felix
+package vfs
+
 
 import (
 	"os"
@@ -19,7 +20,7 @@ var _ Lstater = (*BasePathFs)(nil)
 // Note that it does not clean the error messages on return, so you may
 // reveal the real path on errors.
 type BasePathFs struct {
-	source Fs
+	source Vfs
 	path   string
 }
 
@@ -33,7 +34,7 @@ func (f *BasePathFile) Name() string {
 	return strings.TrimPrefix(sourcename, filepath.Clean(f.path))
 }
 
-func NewBasePathFs(source Fs, path string) Fs {
+func NewBasePathFs(source Vfs, path string) Vfs {
 	return &BasePathFs{source: source, path: path}
 }
 
@@ -177,4 +178,3 @@ func (b *BasePathFs) LstatIfPossible(name string) (os.FileInfo, bool, error) {
 	return fi, false, err
 }
 
-// vim: ts=4 sw=4 noexpandtab nolist syn=go

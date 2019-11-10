@@ -1,4 +1,5 @@
-package felix
+package vfs
+
 
 import (
 	"os"
@@ -20,12 +21,12 @@ import (
 // filter - Note: this will also make the overlay read-only, for writing files
 // in the overlay, use the overlay Fs directly, not via the union Fs.
 type CacheOnReadFs struct {
-	base      Fs
-	layer     Fs
+	base      Vfs
+	layer     Vfs
 	cacheTime time.Duration
 }
 
-func NewCacheOnReadFs(base Fs, layer Fs, cacheTime time.Duration) Fs {
+func NewCacheOnReadFs(base Vfs, layer Vfs, cacheTime time.Duration) Vfs {
 	return &CacheOnReadFs{base: base, layer: layer, cacheTime: cacheTime}
 }
 
@@ -288,3 +289,4 @@ func (u *CacheOnReadFs) Create(name string) (File, error) {
 	}
 	return &UnionFile{Base: bfh, Layer: lfh}, nil
 }
+

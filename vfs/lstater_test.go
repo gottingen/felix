@@ -1,4 +1,5 @@
-package felix
+package vfs
+
 
 import (
 	"os"
@@ -86,3 +87,4 @@ func TestLstatIfPossible(t *testing.T) {
 	testLstat(roFs, pathFile, pathSymlink)
 	testLstat(roFsMem, pathFileMem, "")
 }
+
