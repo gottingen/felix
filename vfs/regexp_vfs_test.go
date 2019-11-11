@@ -1,4 +1,5 @@
-package felix
+package vfs
+
 
 import (
 	"regexp"
@@ -94,3 +95,4 @@ func TestFilterRegexReadDir(t *testing.T) {
 		t.Errorf("Got wrong number of names: %v", names)
 	}
 }
+

@@ -1,28 +1,196 @@
-
-package felix
+package vfs
 
 import (
 	"bytes"
 	"fmt"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 	"unicode"
-
-	"golang.org/x/text/transform"
-	"golang.org/x/text/unicode/norm"
 )
+
+
+// byName implements sort.Interface.
+type byName []os.FileInfo
+
+func (f byName) Len() int           { return len(f) }
+func (f byName) Less(i, j int) bool { return f[i].Name() < f[j].Name() }
+func (f byName) Swap(i, j int)      { f[i], f[j] = f[j], f[i] }
+
+func ReadDir(fs Vfs, dirname string) ([]os.FileInfo, error) {
+	f, err := fs.Open(dirname)
+	if err != nil {
+		return nil, err
+	}
+	list, err := f.Readdir(-1)
+	f.Close()
+	if err != nil {
+		return nil, err
+	}
+	sort.Sort(byName(list))
+	return list, nil
+}
+
+
+func ReadFile(fs Vfs, filename string) ([]byte, error) {
+	f, err := fs.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	// It's a good but not certain bet that FileInfo will tell us exactly how much to
+	// read, so let's try it but be prepared for the answer to be wrong.
+	var n int64
+
+	if fi, err := f.Stat(); err == nil {
+		// Don't preallocate a huge buffer, just in case.
+		if size := fi.Size(); size < 1e9 {
+			n = size
+		}
+	}
+	// As initial capacity for readAll, use n + a little extra in case Size is zero,
+	// and to avoid another allocation after Read has filled the buffer.  The readAll
+	// call will read into its allocated internal buffer cheaply.  If the size was
+	// wrong, we'll either waste some space off the end or reallocate as needed, but
+	// in the overwhelmingly common case we'll get it just right.
+	return readAll(f, n+bytes.MinRead)
+}
+
+
+// readAll reads from r until an error or EOF and returns the data it read
+// from the internal buffer allocated with a specified capacity.
+func readAll(r io.Reader, capacity int64) (b []byte, err error) {
+	buf := bytes.NewBuffer(make([]byte, 0, capacity))
+	// If the buffer overflows, we will get bytes.ErrTooLarge.
+	// Return that as an error. Any other panic remains.
+	defer func() {
+		e := recover()
+		if e == nil {
+			return
+		}
+		if panicErr, ok := e.(error); ok && panicErr == bytes.ErrTooLarge {
+			err = panicErr
+		} else {
+			panic(e)
+		}
+	}()
+	_, err = buf.ReadFrom(r)
+	return buf.Bytes(), err
+}
+
+
+// ReadAll reads from r until an error or EOF and returns the data it read.
+// A successful call returns err == nil, not err == EOF. Because ReadAll is
+// defined to read from src until EOF, it does not treat an EOF from Read
+// as an error to be reported.
+func ReadAll(r io.Reader) ([]byte, error) {
+	return readAll(r, bytes.MinRead)
+}
+
+
+func WriteFile(fs Vfs, filename string, data []byte, perm os.FileMode) error {
+	f, err := fs.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+	n, err := f.Write(data)
+	if err == nil && n < len(data) {
+		err = io.ErrShortWrite
+	}
+	if err1 := f.Close(); err == nil {
+		err = err1
+	}
+	return err
+}
+
+
+// Random number state.
+// We generate random temporary file names so that there's a good
+// chance the file doesn't exist yet - keeps the number of tries in
+// TempFile to a minimum.
+var rand uint32
+var randmu sync.Mutex
+
+func reseed() uint32 {
+	return uint32(time.Now().UnixNano() + int64(os.Getpid()))
+}
+
+func nextSuffix() string {
+	randmu.Lock()
+	r := rand
+	if r == 0 {
+		r = reseed()
+	}
+	r = r*1664525 + 1013904223 // constants from Numerical Recipes
+	rand = r
+	randmu.Unlock()
+	return strconv.Itoa(int(1e9 + r%1e9))[1:]
+}
+
+
+func TempFile(fs Vfs, dir, prefix string) (f File, err error) {
+	if dir == "" {
+		dir = os.TempDir()
+	}
+
+	nconflict := 0
+	for i := 0; i < 10000; i++ {
+		name := filepath.Join(dir, prefix+nextSuffix())
+		f, err = fs.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+		if os.IsExist(err) {
+			if nconflict++; nconflict > 10 {
+				randmu.Lock()
+				rand = reseed()
+				randmu.Unlock()
+			}
+			continue
+		}
+		break
+	}
+	return
+}
+
+
+func TempDir(fs Vfs, dir, prefix string) (name string, err error) {
+	if dir == "" {
+		dir = os.TempDir()
+	}
+
+	nconflict := 0
+	for i := 0; i < 10000; i++ {
+		try := filepath.Join(dir, prefix+nextSuffix())
+		err = fs.Mkdir(try, 0700)
+		if os.IsExist(err) {
+			if nconflict++; nconflict > 10 {
+				randmu.Lock()
+				rand = reseed()
+				randmu.Unlock()
+			}
+			continue
+		}
+		if err == nil {
+			name = try
+		}
+		break
+	}
+	return
+}
+
 
 // Filepath separator defined by os.Separator.
 const FilePathSeparator = string(filepath.Separator)
 
 // Takes a reader and a path and writes the content
-func (a Felix) WriteReader(path string, r io.Reader) (err error) {
-	return WriteReader(a.Fs, path, r)
-}
 
-func WriteReader(fs Fs, path string, r io.Reader) (err error) {
+
+func WriteReader(fs Vfs, path string, r io.Reader) (err error) {
 	dir, _ := filepath.Split(path)
 	ospath := filepath.FromSlash(dir)
 
@@ -46,11 +214,8 @@ func WriteReader(fs Fs, path string, r io.Reader) (err error) {
 }
 
 // Same as WriteReader but checks to see if file/directory already exists.
-func (a Felix) SafeWriteReader(path string, r io.Reader) (err error) {
-	return SafeWriteReader(a.Fs, path, r)
-}
 
-func SafeWriteReader(fs Fs, path string, r io.Reader) (err error) {
+func SafeWriteReader(fs Vfs, path string, r io.Reader) (err error) {
 	dir, _ := filepath.Split(path)
 	ospath := filepath.FromSlash(dir)
 
@@ -79,13 +244,10 @@ func SafeWriteReader(fs Fs, path string, r io.Reader) (err error) {
 	return
 }
 
-func (a Felix) GetTempDir(subPath string) string {
-	return GetTempDir(a.Fs, subPath)
-}
 
 // GetTempDir returns the default temp directory with trailing slash
 // if subPath is not empty then it will be created recursively with mode 777 rwx rwx rwx
-func GetTempDir(fs Fs, subPath string) string {
+func GetTempDir(fs Vfs, subPath string) string {
 	addSlash := func(p string) string {
 		if FilePathSeparator != p[len(p)-1:] {
 			p = p + FilePathSeparator
@@ -153,12 +315,9 @@ func isMn(r rune) bool {
 	return unicode.Is(unicode.Mn, r) // Mn: nonspacing marks
 }
 
-func (a Felix) FileContainsBytes(filename string, subslice []byte) (bool, error) {
-	return FileContainsBytes(a.Fs, filename, subslice)
-}
 
 // Check if a file contains a specified byte slice.
-func FileContainsBytes(fs Fs, filename string, subslice []byte) (bool, error) {
+func FileContainsBytes(fs Vfs, filename string, subslice []byte) (bool, error) {
 	f, err := fs.Open(filename)
 	if err != nil {
 		return false, err
@@ -168,12 +327,9 @@ func FileContainsBytes(fs Fs, filename string, subslice []byte) (bool, error) {
 	return readerContainsAny(f, subslice), nil
 }
 
-func (a Felix) FileContainsAnyBytes(filename string, subslices [][]byte) (bool, error) {
-	return FileContainsAnyBytes(a.Fs, filename, subslices)
-}
 
 // Check if a file contains any of the specified byte slices.
-func FileContainsAnyBytes(fs Fs, filename string, subslices [][]byte) (bool, error) {
+func FileContainsAnyBytes(fs Vfs, filename string, subslices [][]byte) (bool, error) {
 	f, err := fs.Open(filename)
 	if err != nil {
 		return false, err
@@ -235,12 +391,7 @@ func readerContainsAny(r io.Reader, subslices ...[]byte) bool {
 	return false
 }
 
-func (a Felix) DirExists(path string) (bool, error) {
-	return DirExists(a.Fs, path)
-}
-
-// DirExists checks if a path exists and is a directory.
-func DirExists(fs Fs, path string) (bool, error) {
+func DirExists(fs Vfs, path string) (bool, error) {
 	fi, err := fs.Stat(path)
 	if err == nil && fi.IsDir() {
 		return true, nil
@@ -251,12 +402,10 @@ func DirExists(fs Fs, path string) (bool, error) {
 	return false, err
 }
 
-func (a Felix) IsDir(path string) (bool, error) {
-	return IsDir(a.Fs, path)
-}
+
 
 // IsDir checks if a given path is a directory.
-func IsDir(fs Fs, path string) (bool, error) {
+func IsDir(fs Vfs, path string) (bool, error) {
 	fi, err := fs.Stat(path)
 	if err != nil {
 		return false, err
@@ -264,12 +413,10 @@ func IsDir(fs Fs, path string) (bool, error) {
 	return fi.IsDir(), nil
 }
 
-func (a Felix) IsEmpty(path string) (bool, error) {
-	return IsEmpty(a.Fs, path)
-}
+
 
 // IsEmpty checks if a given file or directory is empty.
-func IsEmpty(fs Fs, path string) (bool, error) {
+func IsEmpty(fs Vfs, path string) (bool, error) {
 	if b, _ := Exists(fs, path); !b {
 		return false, fmt.Errorf("%q path does not exist", path)
 	}
@@ -289,12 +436,9 @@ func IsEmpty(fs Fs, path string) (bool, error) {
 	return fi.Size() == 0, nil
 }
 
-func (a Felix) Exists(path string) (bool, error) {
-	return Exists(a.Fs, path)
-}
 
 // Check if a file or directory exists.
-func Exists(fs Fs, path string) (bool, error) {
+func Exists(fs Vfs, path string) (bool, error) {
 	_, err := fs.Stat(path)
 	if err == nil {
 		return true, nil
@@ -313,3 +457,10 @@ func FullBaseFsPath(basePathFs *BasePathFs, relativePath string) string {
 
 	return combinedPath
 }
+
+
+
+
+
+
+

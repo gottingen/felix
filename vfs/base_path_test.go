@@ -1,4 +1,5 @@
-package felix
+package vfs
+
 
 import (
 	"os"
@@ -109,7 +110,7 @@ func TestNestedBasePaths(t *testing.T) {
 		level3Fs := NewBasePathFs(level2Fs, ds.Dir3)
 
 		type spec struct {
-			BaseFs   Fs
+			BaseFs   Vfs
 			FileName string
 		}
 		specs := []spec{
@@ -188,3 +189,4 @@ func TestBasePathTempFile(t *testing.T) {
 		t.Fatalf("TempFile realpath leaked: expected %s, got %s", expected, actual)
 	}
 }
+

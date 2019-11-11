@@ -1,7 +1,7 @@
-package felix
+package vfs
 
 import (
-"os"
+	"os"
 )
 
 // Lstater is an optional interface in Felix. It is only implemented by the
@@ -12,4 +12,3 @@ import (
 type Lstater interface {
 	LstatIfPossible(name string) (os.FileInfo, bool, error)
 }
-

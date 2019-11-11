@@ -1,11 +1,9 @@
-
-
 // +build darwin openbsd freebsd netbsd dragonfly
 
-package felix
+package vfs
 
 import (
-"syscall"
+	"syscall"
 )
 
 const BADFD = syscall.EBADF

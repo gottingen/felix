@@ -1,8 +1,10 @@
-package felix
+package vfs
+
+
 
 import (
-"os"
-"time"
+	"os"
+	"time"
 )
 
 var _ Lstater = (*OsFs)(nil)
@@ -13,7 +15,7 @@ var _ Lstater = (*OsFs)(nil)
 // (http://golang.org/pkg/os/).
 type OsFs struct{}
 
-func NewOsFs() Fs {
+func NewOsFs() Vfs {
 	return &OsFs{}
 }
 
@@ -85,4 +87,6 @@ func (OsFs) LstatIfPossible(name string) (os.FileInfo, bool, error) {
 	fi, err := os.Lstat(name)
 	return fi, true, err
 }
+
+
 

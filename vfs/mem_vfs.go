@@ -1,4 +1,5 @@
-package felix
+package vfs
+
 
 import (
 	"fmt"
@@ -9,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gottingen/felix/mem"
+	"github.com/gottingen/felix/vfs/mem"
 )
 
 type MemMapFs struct {
@@ -18,7 +19,7 @@ type MemMapFs struct {
 	init sync.Once
 }
 
-func NewMemMapFs() Fs {
+func NewMemMapFs() Vfs {
 	return &MemMapFs{}
 }
 
@@ -344,9 +345,3 @@ func (m *MemMapFs) List() {
 		fmt.Println(x.Name(), y.Size())
 	}
 }
-
-// func debugMemMapList(fs Fs) {
-// 	if x, ok := fs.(*MemMapFs); ok {
-// 		x.List()
-// 	}
-// }

@@ -5,7 +5,7 @@
 // +build !dragonfly
 // +build !netbsd
 
-package felix
+package vfs
 
 import (
 	"syscall"

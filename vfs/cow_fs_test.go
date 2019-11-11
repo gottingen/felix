@@ -1,9 +1,10 @@
-package felix
+package vfs
+
 
 import (
-"os"
-"path/filepath"
-"testing"
+	"os"
+	"path/filepath"
+	"testing"
 )
 
 func TestCopyOnWrite(t *testing.T) {
@@ -29,7 +30,7 @@ func TestCopyOnWrite(t *testing.T) {
 
 	// We want the composite file system to behave like the OS file system
 	// on Mkdir and MkdirAll
-	for _, fs := range []Fs{osFs, compositeFs} {
+	for _, fs := range []Vfs{osFs, compositeFs} {
 		err = fs.Mkdir(dir, 0744)
 		if err == nil || !os.IsExist(err) {
 			t.Errorf("Mkdir: Got %q for %T", err, fs)
